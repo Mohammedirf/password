@@ -5,7 +5,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose=require("mongoose");
-const encrypt=require("mongoose-encryption");
+const bcrypt = require('bcrypt');
 
 const app = express();
 
@@ -21,13 +21,10 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-//encrypting the password
-userSchema.plugin(encrypt, {secret: process.env.DB_SECRET, encryptedFields: ["password"]});
-
 // defining the models
 const User = mongoose.model("User", userSchema);
 
-
+var saltRounds=10;
 
 app.use(bodyParser.urlencoded({
   extended: true
@@ -48,41 +45,51 @@ app.get("/register",(req,res)=>{
   res.render("register.ejs");
 });
 
+app.get("/logout",(req,res)=>{
+  res.render("home.ejs");
+});
+
 
 app.post("/register",(req,res)=>{
   const newUsername=req.body.username;
   const newPassword=req.body.password;
+  bcrypt.hash(newPassword, saltRounds, function(err, hash) {
+    const newUser = new User({
+        username:newUsername,
+        password:hash
+    });
+    newUser.save((err)=>{
+        if(!err){
+          console.log("User Added Successfully");
+          res.render("secrets.ejs");
+        }
+        else{
+          console.log(err);
+        }
+    });
+  });
+
   //console.log(newUsername+" "+newPassword);
-  const newUser = new User({
-      username:newUsername,
-      password:newPassword
-  });
-  newUser.save((err)=>{
-      if(!err){
-        console.log("User Added Successfully");
-        res.render("secrets.ejs");
-      }
-      else{
-        console.log(err);
-      }
-  });
+
 });
 
 app.post("/login",function(req,res){
+  const entPassword = req.body.password;
   User.findOne({username: req.body.username
 },
 function(err,user){
   if(user){
-    console.log(user.password);
-    console.log(req.body.password);
-    if(user.password===req.body.password){
-      console.log("Password Matched");
-      res.render("secrets.ejs");
-    }
-    else{
-      console.log("Password Incorrect");
-      res.redirect("/");
-    }
+    bcrypt.compare(entPassword, user.password, function(err, result) {
+      if(result) {
+        console.log("Password Matched");
+        res.render("secrets.ejs");
+      }
+      else{
+        console.log("Password Incorrect");
+        res.redirect("/");
+      }
+    });
+
   }
   else{
     console.log("User doesnt exist");
